@@ -50,7 +50,8 @@ import {
   Mic,
   Compass,
   BellRing,
-  Package
+  Package,
+  Navigation
 } from 'lucide-react';
 import { FLUTTER_CODE_FILES, BACKEND_CODE_FILES } from './code_repository';
 import { BrandLogo } from './components/BrandLogo';
@@ -580,7 +581,22 @@ export default function App() {
       prev.map((t) => {
         if (t.id === id) {
           logEvent(`PATCH /api/turnos/${id}/aceptar - 200 OK - Block designated. Status updated to CONFIRMADO`, 'success');
-          // Add payment immediately for trial simulation
+          triggerNotification('Turno Asignado', `¡Turno de ${t.comercio_nombre} asignado! Debes presentarte a la hora acordada.`);
+          return { ...t, estado: 'confirmado', repartidor_id: 1 };
+        }
+        return t;
+      })
+    );
+  };
+
+  const finishShift = (id: number) => {
+    const item = turnos.find(t => t.id === id);
+    if (!item || item.estado === 'completado') return;
+    
+    setTurnos((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          logEvent(`PATCH /api/turnos/${id}/finalizar - 200 OK - Block finished`, 'success');
           const shareRepartidor = t.monto_repartidor;
           const sharePlataforma = t.monto_plataforma;
 
@@ -588,7 +604,6 @@ export default function App() {
             setWalletSaldo((prevSal) => prevSal + shareRepartidor);
             setAdminSaldo((prevAdm) => prevAdm + sharePlataforma);
 
-            // Add Transactions
             setTransacciones((trans) => [
               {
                 id: trans.length + 1,
@@ -614,7 +629,7 @@ export default function App() {
             logEvent(`[Billetera Split] 80% paid to Repartidor (+$${shareRepartidor}). 20% commission paid to Platform (+$${sharePlataforma})`, 'info');
           }, 600);
 
-          return { ...t, estado: 'confirmado', repartidor_id: 1 };
+          return { ...t, estado: 'completado', repartidor_id: 1 };
         }
         return t;
       })
@@ -630,6 +645,49 @@ export default function App() {
           setActiveDeliveryId(id);
           setActiveTab('mision'); // Switch to active trip
           return { ...e, estado: 'asignado', repartidor_id: 1 };
+        }
+        return e;
+      })
+    );
+  };
+
+  const finishDelivery = (id: number) => {
+    const item = entregas.find(e => e.id === id);
+    if (!item || item.estado === 'entregado') return;
+
+    setEntregas((prev) =>
+      prev.map((e) => {
+        if (e.id === id) {
+          logEvent(`PATCH /api/entregas/${id}/estado - Status: ENTREGADO`, 'success');
+          const shareRep = e.monto_repartidor;
+          const sharePlat = e.monto_plataforma;
+
+          setWalletSaldo((wallet) => wallet + shareRep);
+          setAdminSaldo((adm) => adm + sharePlat);
+
+          setTransacciones((trans) => [
+            {
+              id: trans.length + 1,
+              tipo: 'ingreso_envio',
+              monto: shareRep,
+              saldo_anterior: walletSaldo,
+              saldo_posterior: walletSaldo + shareRep,
+              referencia: `envio_${e.id}`,
+              fecha: new Date().toISOString().replace('T', ' ').slice(0, 16)
+            },
+            {
+               id: trans.length + 2,
+               tipo: 'comision_plataforma',
+               monto: sharePlat,
+               saldo_anterior: adminSaldo,
+               saldo_posterior: adminSaldo + sharePlat,
+               referencia: `envio_${e.id}`,
+               fecha: new Date().toISOString().replace('T', ' ').slice(0, 16)
+            },
+            ...trans
+          ]);
+          logEvent(`[Billetera Split] Paid +$${shareRep} to rider, +$${sharePlat} to platform.`, 'info');
+          return { ...e, estado: 'entregado' };
         }
         return e;
       })
@@ -1658,12 +1716,12 @@ CREATE TABLE \`turnos\` (
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* JOBS LIST - Acceptance form */}
-            <div className="lg:col-span-5 flex flex-col gap-5">
+            {/* COLUMN 1: JOBS AVAILABLE */}
+            <div className="lg:col-span-4 flex flex-col gap-5">
               <div className="bg-[#111720]/80 border border-gray-800 p-5 rounded-2xl space-y-4">
                 <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
                   <Calendar className="w-4 h-4 text-cyan-400" />
-                  Turnos / Bloques (Comercios)
+                  Turnos B2B Disponibles
                 </h3>
                 <div className="space-y-3">
                   {turnos.filter(t => t.estado === 'disponible').length === 0 ? (
@@ -1690,7 +1748,7 @@ CREATE TABLE \`turnos\` (
               <div className="bg-[#111720]/80 border border-gray-800 p-5 rounded-2xl space-y-4">
                 <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
                   <Package className="w-4 h-4 text-cyan-400" />
-                  Entregas Expres (On-Demand)
+                  Entregas Express Libres
                 </h3>
                 <div className="space-y-3">
                   {entregas.filter(e => e.estado === 'buscando_repartidor').length === 0 ? (
@@ -1715,13 +1773,96 @@ CREATE TABLE \`turnos\` (
               </div>
             </div>
 
-            {/* ASISTENTE INTELIGENTE VOZ/TEXTO ON-DEMAND DE DELIVERYPLUS */}
-            <div className="lg:col-span-7 bg-[#121A26] border border-blue-brand/20 p-5 rounded-2xl space-y-4">
+            {/* COLUMN 2: ACTIVE JOBS & WALLET */}
+            <div className="lg:col-span-4 flex flex-col gap-5">
+              <div className="bg-[#111720]/80 border border-emerald-500/20 p-5 rounded-2xl space-y-4 shadow-lg shadow-emerald-500/5">
+                <h3 className="font-bold text-emerald-400 text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
+                  <Navigation className="w-4 h-4" />
+                  Tareas en Curso
+                </h3>
+                <div className="space-y-3">
+                  {/* Active Shifts */}
+                  {turnos.filter(t => t.estado === 'confirmado').map(t => (
+                    <div key={t.id} className="bg-emerald-900/10 p-3 rounded-xl border border-emerald-500/20 flex flex-col gap-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                           <span className="text-xs font-bold text-white">Bloque en {t.comercio_nombre}</span>
+                           <span className="text-[10px] text-emerald-400 capitalize">En proceso ({t.horario})</span>
+                        </div>
+                        <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">Asignado</span>
+                      </div>
+                      <button onClick={() => finishShift(t.id)} className="bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs w-full py-2 rounded-lg active:scale-95 transition-all">
+                        FINALIZAR TURNO
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Active Deliveries */}
+                  {entregas.filter(e => ['asignado', 'recolectado', 'en_camino'].includes(e.estado)).map(e => (
+                    <div key={e.id} className="bg-orange-900/10 p-3 rounded-xl border border-orange-500/20 flex flex-col gap-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex flex-col">
+                           <span className="text-xs font-bold text-white">Entrega #{e.id}</span>
+                           <span className="text-[10px] text-orange-400 capitalize">{e.direccion_destino}</span>
+                        </div>
+                        <span className="bg-orange-500/20 text-orange-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase">{e.estado.replace('_', ' ')}</span>
+                      </div>
+                      <button onClick={() => finishDelivery(e.id)} className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs w-full py-2 rounded-lg active:scale-95 transition-all">
+                        FINALIZAR Y COBRAR
+                      </button>
+                    </div>
+                  ))}
+
+                  {turnos.filter(t => t.estado === 'confirmado').length === 0 && entregas.filter(e => ['asignado', 'recolectado', 'en_camino'].includes(e.estado)).length === 0 && (
+                    <p className="text-gray-500 text-xs italic text-center py-2">No tienes tareas en curso en este momento.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Billetera Detail */}
+              <div className="bg-[#111720]/80 border border-gray-800 p-5 rounded-2xl space-y-4">
+                <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
+                  <Wallet className="w-4 h-4 text-cyan-400" />
+                  Billetera Express
+                </h3>
+                <div className="flex flex-col items-center justify-center p-4 bg-black/40 rounded-xl border border-gray-800 mb-2">
+                  <span className="text-xs text-gray-500 font-mono mb-1 uppercase">Saldo Disponible (80%)</span>
+                  <span className="text-3xl font-black text-white font-display text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-cyan-400">
+                    {walletSaldo.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })}
+                  </span>
+                </div>
+                
+                <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-4">Últimas Transacciones</h4>
+                <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                  {transacciones.filter(t => t.tipo.includes('ingreso')).length === 0 ? (
+                    <p className="text-gray-500 text-xs italic">Aún no hay ingresos de tareas finalizadas.</p>
+                  ) : (
+                    transacciones.filter(t => t.tipo.includes('ingreso')).slice(0, 5).map(tx => (
+                      <div key={tx.id} className="flex justify-between items-center bg-black/30 p-2.5 rounded-lg border border-gray-800/50">
+                        <div className="flex items-center gap-2">
+                           <div className="bg-emerald-500/20 p-1.5 rounded-md text-emerald-400">
+                             {tx.tipo === 'ingreso_turno' ? <Calendar className="w-3.5 h-3.5" /> : <Package className="w-3.5 h-3.5" />}
+                           </div>
+                           <div className="flex flex-col">
+                             <span className="text-[10px] font-bold text-gray-300 uppercase">{tx.tipo.replace('_', ' ')}</span>
+                             <span className="text-[9px] text-gray-500">{tx.fecha.split(' ')[1]}</span>
+                           </div>
+                        </div>
+                        <span className="text-emerald-400 font-bold text-xs">+{tx.monto.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 3: ASISTENTE INTELIGENTE VOZ/TEXTO ON-DEMAND DE DELIVERYPLUS */}
+            <div className="lg:col-span-4 bg-[#121A26] border border-blue-brand/20 p-5 rounded-2xl space-y-4">
               <h3 className="font-extrabold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2 font-display">
                 <Sparkles className="w-4 h-4 text-blue-brand animate-pulse" />
-                Asistente de Asignación de Trabajos
+                Asistente Trabajo
               </h3>
-              <p className="text-xs text-gray-400">Recibe nuevas tareas, coordina rutas y conversa con el sistema verbalmente.</p>
+              <p className="text-[11px] leading-tight text-gray-400">Recibe tareas, coordina rutas y conversa en modo manos libres con el sistema.</p>
               <AIChatAssistant 
                 turnos={turnos}
                 setTurnos={setTurnos}
