@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { MapPin, Navigation, Map, CloudRain, Sun, Wind, Flame, Building2, Package } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MapPin, Navigation, Map, CloudRain, Sun, Wind, Flame, Building2, Package, Bike, TreePine, Utensils, Hospital, ShoppingBag, Landmark } from 'lucide-react';
 
-interface Marker {
+interface MarkerProp {
   id: string;
   name: string;
   x: number;
@@ -12,20 +16,44 @@ interface Marker {
 interface ArgentinaMapProps {
   gpsSimulating: boolean;
   gpsProgress: number;
-  userCoords?: { lat: number; lng: number }; // Simplified for styling
-  markers: Marker[];
+  userCoords?: { lat: number; lng: number };
+  markers: MarkerProp[];
 }
 
-interface RegionNode {
-  id: string;
-  name: string;
-  x: number;
-  y: number;
-  weather: 'sunny' | 'rainy' | 'windy' | 'hot';
-  multiplier: number;
-  activeOrders: number;
-  provincias: string;
-}
+const createCustomIcon = (iconEle: React.ReactElement, colorClass: string, label: string) => {
+  const htmlString = renderToStaticMarkup(
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', borderRadius: '999px', padding: '4px', border: '1px solid rgba(75,85,99,0.5)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}>
+        {React.cloneElement(iconEle, { className: `w-3 h-3 ${colorClass}` })}
+      </div>
+      <span className={`text-[11px] font-medium leading-none ${colorClass}`} style={{ textShadow: '0px 1px 3px rgba(0,0,0,0.9)' }}>
+        {label}
+      </span>
+    </div>
+  );
+
+  return new L.DivIcon({
+    html: htmlString,
+    className: 'custom-leaflet-icon-wrapper',
+    iconSize: [200, 24],
+    iconAnchor: [12, 12],
+  });
+};
+
+const mapLocations = [
+  { lat: -27.352, lng: -55.897, title: 'Muelle de Pescadores', icon: <TreePine />, color: 'text-emerald-500' },
+  { lat: -27.355, lng: -55.893, title: 'Parque República del Paraguay', icon: <TreePine />, color: 'text-emerald-500' },
+  { lat: -27.358, lng: -55.888, title: 'La Ruedita', icon: <Utensils />, color: 'text-orange-500' },
+  { lat: -27.362, lng: -55.892, title: 'PATOTÍ', icon: <MapPin />, color: 'text-gray-400' },
+  { lat: -27.366, lng: -55.896, title: 'VILLA DE LA CHACRA 65', icon: <MapPin />, color: 'text-gray-400' },
+  { lat: -27.363, lng: -55.884, title: 'CERRO PELÓN', icon: <MapPin />, color: 'text-gray-400' },
+  { lat: -27.366, lng: -55.892, title: 'Plaza San Martín', icon: <TreePine />, color: 'text-emerald-500' },
+  { lat: -27.364, lng: -55.888, title: 'Plaza 9 de Julio', icon: <TreePine />, color: 'text-emerald-500' },
+  { lat: -27.367, lng: -55.887, title: 'Anyway', icon: <ShoppingBag />, color: 'text-blue-400' },
+  { lat: -27.371, lng: -55.891, title: 'Sanatorio Boratti', icon: <Hospital />, color: 'text-red-400' },
+  { lat: -27.369, lng: -55.880, title: 'Cuarto Tramo, Costanera', icon: <Landmark />, color: 'text-[#E066FF]' },
+  { lat: -27.375, lng: -55.884, title: 'Costanera Posadas', icon: <Landmark />, color: 'text-[#E066FF]' },
+];
 
 export const ArgentinaMap: React.FC<ArgentinaMapProps> = ({
   gpsSimulating,
@@ -33,189 +61,65 @@ export const ArgentinaMap: React.FC<ArgentinaMapProps> = ({
   userCoords,
   markers
 }) => {
-  const [selectedRegion, setSelectedRegion] = useState<string>('amba');
-
-  // Interactive cities across Argentina with their B2B status
-  const regions: RegionNode[] = [
-    { id: 'amba', name: 'AMBA & CABA', x: 67, y: 46, weather: 'rainy', multiplier: 1.5, activeOrders: 14, provincias: 'Buenos Aires' },
-    { id: 'cordoba', name: 'Córdoba Capital', x: 52, y: 32, weather: 'sunny', multiplier: 1.0, activeOrders: 6, provincias: 'Córdoba' },
-    { id: 'rosario', name: 'Rosario Nodo B2B', x: 62, y: 39, weather: 'windy', multiplier: 1.2, activeOrders: 5, provincias: 'Santa Fe' },
-    { id: 'mendoza', name: 'Mendoza Logística', x: 42, y: 38, weather: 'hot', multiplier: 1.3, activeOrders: 4, provincias: 'Mendoza' },
-    { id: 'patagonia', name: 'Neuquén-Bariloche', x: 44, y: 68, weather: 'windy', multiplier: 1.2, activeOrders: 2, provincias: 'Neuquén / Río Negro' }
-  ];
-
-  const activeNode = regions.find(r => r.id === selectedRegion) || regions[0];
-
-  const getWeatherIcon = (type: string) => {
-    switch (type) {
-      case 'rainy': return <CloudRain className="w-4 h-4 text-blue-brand animate-bounce" />;
-      case 'windy': return <Wind className="w-4 h-4 text-cyan-400" />;
-      case 'hot': return <Flame className="w-4 h-4 text-red-success text-[#FF3B30] animate-pulse" />;
-      case 'sunny':
-      default:
-        return <Sun className="w-4 h-4 text-green-success" />;
-    }
-  };
-
-  const getMultiplierColor = (mul: number) => {
-    if (mul >= 1.5) return 'text-[#FF3B30]';
-    if (mul >= 1.2) return 'text-[#FFC107]';
-    return 'text-green-success';
-  };
-
   return (
-    <div className="flex-1 flex flex-col justify-end relative bg-[#05060A] shadow-inner rounded-3xl overflow-hidden border border-blue-brand/20 min-h-[350px]">
-      
-      {/* 1. Header label indicating physical map location */}
-      <div className="absolute top-3 left-3 right-3 z-10 bg-black/80 backdrop-blur-md rounded-xl p-2.5 border border-blue-brand/30 flex items-center justify-between text-[11px] font-sans">
-        <div className="flex items-center gap-1.5">
-          <Map className="w-3.5 h-3.5 text-blue-brand" />
-          <span className="font-bold text-white uppercase tracking-tight">Ecosistema Argentina</span>
+    <div className="flex-1 flex flex-col relative rounded-[2rem] overflow-hidden border border-gray-800/80 min-h-[400px] shadow-2xl w-full h-full">
+      {/* HUD OVERLAYS */}
+      <div className="absolute top-5 left-5 z-[1000] flex items-center bg-[#07090C]/95 px-4 py-2.5 rounded-xl border border-gray-800/60 shadow-xl gap-3">
+        <div className="relative flex h-2.5 w-2.5">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
         </div>
-        <span className="text-[9px] bg-blue-brand/20 text-blue-brand px-1.5 py-0.5 rounded font-mono font-bold">
-          LIVE DATA
-        </span>
+        <div className="flex flex-col">
+           <span className="text-white font-extrabold text-[10px] tracking-widest uppercase leading-tight font-display">Vínculo Satelital</span>
+           <span className="text-gray-500 font-bold text-[8px] tracking-wider uppercase leading-tight">Sincronización: 14ms</span>
+        </div>
       </div>
 
-      {/* 2. SVG Vector Map of Argentina & Nodes */}
-      <div className="absolute inset-x-0 top-0 bottom-24 z-0 flex items-center justify-center bg-[#05060A] p-4 select-none">
-        <svg 
-          viewBox="10 -5 90 110" 
-          className="w-full h-full stroke-blue-brand/10 opacity-90 transition-all duration-500"
+      <div className="absolute bottom-5 right-5 z-[1000] flex items-center bg-black/95 px-5 py-3 rounded-full border border-gray-800/80 shadow-xl gap-2.5">
+        <Bike className="w-4 h-4 text-cyan-400" />
+        <span className="text-white text-[11px] font-black tracking-widest uppercase font-display">Simulador</span>
+      </div>
+
+      {/* LEAFLET MAP */}
+      <div className="absolute inset-0 z-0">
+        <MapContainer 
+          center={[-27.365, -55.890]} 
+          zoom={14.5} 
+          scrollWheelZoom={true} 
+          style={{ width: '100%', height: '100%', background: '#0a0e17' }}
+          zoomControl={false}
+          attributionControl={false}
         >
-          <defs>
-            <filter id="neon" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
-              <feMerge>
-                <feMergeNode in="coloredBlur"/>
-                <feMergeNode in="SourceGraphic"/>
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Futuristic Grid */}
-          <g className="opacity-10 stroke-blue-brand stroke-[0.25]" strokeDasharray="3 3">
-            <line x1="20" y1="0" x2="20" y2="100" />
-            <line x1="40" y1="0" x2="40" y2="100" />
-            <line x1="60" y1="0" x2="60" y2="100" />
-            <line x1="80" y1="0" x2="80" y2="100" />
-            <line x1="0" y1="20" x2="100" y2="20" />
-            <line x1="0" y1="40" x2="100" y2="40" />
-            <line x1="0" y1="60" x2="100" y2="60" />
-            <line x1="0" y1="80" x2="100" y2="80" />
-          </g>
-
-          {/* Region Halos */}
-          {regions.map((region) => (
-            <circle
-              key={`halo-${region.id}`}
-              cx={region.x}
-              cy={region.y}
-              r="8"
-              className="fill-violet-500/10 stroke-violet-500/30 animate-pulse"
-              strokeWidth="0.5"
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+          
+          {mapLocations.map((loc, i) => (
+            <Marker 
+              key={i} 
+              position={[loc.lat, loc.lng]}
+              icon={createCustomIcon(loc.icon, loc.color, loc.title)}
             />
           ))}
 
-          {/* Connection Circuits */}
-          {regions.map((region, i) => (
-             i < regions.length - 1 && (
-               <path 
-                 key={`path-${i}`}
-                 d={`M ${region.x} ${region.y} L ${regions[i+1].x} ${regions[i+1].y}`}
-                 className="stroke-blue-brand/40 stroke-[0.5]" 
-                 strokeDasharray="2 2"
-                 style={{ filter: 'url(#neon)' }}
-               />
-             )
-          ))}
-
-          {/* Styled visual silhouette of Argentina boundary */}
-          <path
-            d="M 52 4 C 56 4, 61 2, 65 4 C 67 4, 71 3, 72 6 C 74 10, 77 12, 79 17 C 81 22, 85 24, 82 28 C 79 32, 70 34, 68 36 C 67 39, 69 41, 71 43 C 74 46, 75 49, 73 52 C 70 55, 66 53, 63 56 C 60 59, 62 64, 60 67 C 58 72, 54 75, 52 79 C 49 84, 46 87, 44 91 C 42 95, 41 97, 39 96 C 38 95, 37 92, 36 88 C 35 83, 38 78, 38 74 C 38 69, 41 65, 40 60 C 39 55, 36 50, 36 45 C 36 40, 39 35, 39 30 C 38 25, 40 21, 41 17 C 41 12, 45 8, 48 6 Z"
-            className="fill-[#0D1525] stroke-blue-brand/60 stroke-[1.2]"
-            style={{ filter: 'url(#neon)' }}
-          />
-
-          {/* User Location Marker */}
-          {userCoords && (
-             <>
-               <circle 
-                 cx={67 + (userCoords.lng + 58.38) * 100} 
-                 cy={46 - (userCoords.lat + 34.6) * 100} 
-                 r="3" 
-                 className="fill-blue-brand animate-ping" 
-               />
-               <circle 
-                 cx={67 + (userCoords.lng + 58.38) * 100} 
-                 cy={46 - (userCoords.lat + 34.6) * 100} 
-                 r="1.5" 
-                 className="fill-white" 
-               />
-             </>
+          {userCoords && gpsSimulating && (
+            <Marker position={[userCoords.lat, userCoords.lng]} icon={createCustomIcon(<Bike />, 'text-cyan-400', 'Repartidor')} />
           )}
-
-          {/* Commerce/Entrepreneur Markers + Coverage Radius */}
-          {markers.map((marker, i) => (
-            <g key={i}>
-              <circle
-                cx={marker.x}
-                cy={marker.y}
-                r="6"
-                className="fill-blue-brand/5 stroke-blue-brand/20"
-              />
-              <circle 
-                cx={marker.x} cy={marker.y} r="2" 
-                className={marker.type === 'comercio' ? 'fill-[#FF3B30] animate-pulse' : 'fill-[#FFC107] animate-pulse'}
-                style={{ filter: 'url(#neon)' }}
-              />
-              <circle 
-                cx={marker.x} cy={marker.y} r="4" 
-                className={marker.type === 'comercio' ? 'fill-orange-400/20' : 'fill-emerald-400/20'}
-              />
-            </g>
-          ))}
-        </svg>
-
-        {/* Branding Logo */}
-        <div className="absolute bottom-2 left-4 text-[10px] text-gray-500 font-mono">
-          Peluquería Canina Gustavo Bettiol
-        </div>
+        </MapContainer>
       </div>
-
-      {/* 3. Detailed control HUD beneath Argentina Map */}
-      <div className="z-10 bg-[#0C121D]/95 backdrop-blur-md rounded-2xl p-3 border border-blue-brand/20 text-[10px] w-full space-y-2 shrink-0">
-        <div className="flex items-center justify-between border-b border-gray-800/80 pb-1.5">
-          <div>
-            <span className="text-[9px] text-gray-400 block uppercase font-mono font-bold">STATUS DE RED</span>
-            <span className="font-bold text-white text-[11px] font-display flex items-center gap-1">
-              <MapPin className="w-3.5 h-3.5 text-blue-brand" />
-              {activeNode.name}
-            </span>
-          </div>
-          <div className="flex bg-black/35 px-2.5 py-1 rounded-lg items-center gap-1 font-mono">
-            {getWeatherIcon(activeNode.weather)}
-            <span className="text-white font-bold uppercase text-[8px]">{activeNode.weather}</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-tight">
-          <div className="bg-black/20 p-2 rounded-lg border border-blue-brand/10">
-            <span className="text-gray-400 block text-[8px]">COMERCIOS</span>
-            <div className="flex items-center gap-1 text-orange-400">
-                <Building2 className="w-3 h-3"/>
-                <strong className="text-xs font-bold">12</strong>
-            </div>
-          </div>
-          <div className="bg-black/20 p-2 rounded-lg border border-blue-brand/10">
-            <span className="text-gray-400 block text-[8px]">EMPRENDEDORES</span>
-            <div className="flex items-center gap-1 text-emerald-400">
-                <Package className="w-3 h-3"/>
-                <strong className="text-xs font-bold">8</strong>
-            </div>
-          </div>
-        </div>
-      </div>
+      
+      {/* CSS to remove leaflet background to make badges visible properly */}
+      <style>{`
+        .custom-leaflet-icon-wrapper {
+          background: transparent !important;
+          border: none !important;
+        }
+        .leaflet-container {
+          background: #0a0e17 !important;
+          font-family: inherit;
+        }
+      `}</style>
     </div>
   );
 };
+

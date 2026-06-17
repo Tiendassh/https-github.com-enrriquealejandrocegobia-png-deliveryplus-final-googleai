@@ -88,6 +88,16 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [userRole, setUserRole] = useState<'comercio' | 'emprendedor' | 'repartidor'>(role);
+
+  // Cloned Voice Custom State Options
+  const [voicePitch, setVoicePitch] = useState<number>(0.85); // Deeper premium operator sound
+  const [voiceRate, setVoiceRate] = useState<number>(0.95);  // Professional speed pace
+  const [isPlayingVoice, setIsPlayingVoice] = useState<boolean>(false);
+  const [activeSpeechText, setActiveSpeechText] = useState<string>('');
+  const [isFetchingVoice, setIsFetchingVoice] = useState<boolean>(false);
+  const [customVoiceId, setCustomVoiceId] = useState<string>('ByVRQtaK1WDOvTmP1PKO');
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Dynamic ElevenLabs Override Credentials
   const [apiError, setApiError] = useState<string | null>(null);
@@ -265,6 +275,20 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({
         text: 'Enviar paquete pequeño de Yerba Orgánica a Av Santa Fe 4000. Tarifa $3200',
         audioTrans: 'Hola, tengo una entrega rápida de Yerba Orgánica para retirar en Cabrera 3400 y llevar a Santa Fe cuatro mil por tres mil doscientos pesos.',
         ttsTarget: 'Yerba Orgánica despacha paquete pequeño hacia Avenida Santa Fe cuatro mil. Se ha programado alerta GPS para el pool de repartos.'
+      }
+    ],
+    repartidor: [
+      {
+        label: '🛵 Tomar Turno Burger House',
+        text: 'Aceptar el turno de Burger House a las 20:00.',
+        audioTrans: 'Hola asistente, quiero reservar el turno fijo de Burger House de las 20 horas.',
+        ttsTarget: 'Has aceptado el turno fijo para Burger House con inicio a las 20 horas.'
+      },
+      {
+        label: '🛵 Aceptar Envío Pastas de la Nona',
+        text: 'Tomar envío de Pastas de la Nona a Serrano 1100',
+        audioTrans: 'Acepto el viaje pendiente de Pastas de la Nona hacia Serrano mil cien, voy en camino.',
+        ttsTarget: 'Ruta confirmada para el viaje desde Pastas de la Nona. Que tengas buen viaje.'
       }
     ]
   };
@@ -490,6 +514,12 @@ He procesado la solicitud e ingresé la encomienda exprés de inmediato:
              className={`px-3 py-1 rounded transition-all cursor-pointer font-bold uppercase tracking-wider ${userRole === 'emprendedor' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
            >
              📦 Emprendedor
+           </button>
+           <button 
+             onClick={() => setUserRole('repartidor')}
+             className={`px-3 py-1 rounded transition-all cursor-pointer font-bold uppercase tracking-wider ${userRole === 'repartidor' ? 'bg-white text-black' : 'text-gray-400 hover:text-white'}`}
+           >
+             🛵 Repartidor
            </button>
         </div>
       </div>

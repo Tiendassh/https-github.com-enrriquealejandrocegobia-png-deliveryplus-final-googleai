@@ -49,7 +49,8 @@ import {
   Camera,
   Mic,
   Compass,
-  BellRing
+  BellRing,
+  Package
 } from 'lucide-react';
 import { FLUTTER_CODE_FILES, BACKEND_CODE_FILES } from './code_repository';
 import { BrandLogo } from './components/BrandLogo';
@@ -218,7 +219,7 @@ export default function App() {
   const [consoleLogs, setConsoleLogs] = useState<any[]>([]);
   
   // Portal state
-  const [activePortalView, setActivePortalView] = useState<'dashboard' | 'comercios' | 'emprendedores' | 'repartidor' | 'admin'>('dashboard');
+  const [activePortalView, setActivePortalView] = useState<'dashboard' | 'sandbox' | 'descarga' | 'comercio' | 'emprendedor' | 'repartidor' | 'admin'>('dashboard');
   
   // Custom Voice for Assistant
   const [customVoiceId, setCustomVoiceId] = useState<string>('ByVRQtaK1WDOvTmP1PKO');
@@ -235,6 +236,8 @@ export default function App() {
   const [chatMessages, setChatMessages] = useState<Mensaje[]>([]);
   const [newMsgText, setNewMsgText] = useState('');
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
+  const [audioRecordingTimer, setAudioRecordingTimer] = useState(0);
+  const audioIntervalRef = useRef<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState('mockups');
   const [activeCodeModule, setActiveCodeModule] = useState('flutter');
@@ -248,6 +251,14 @@ export default function App() {
   const [micResult, setMicResult] = useState('');
   const [gpsCoords, setGpsCoords] = useState({ lat: -34.6037, lng: -58.3816 });
   const [gyroForces, setGyroForces] = useState({ x: 0, y: 0, z: 0 });
+  const [emprendedorNombre, setEmprendedorNombre] = useState('Pastas de la Nona');
+  const [entregaOrigen, setEntregaOrigen] = useState('Av. Corrientes 1000');
+  const [entregaDestino, setEntregaDestino] = useState('Av. Corrientes 2000');
+  const [entregaTamano, setEntregaTamano] = useState('pequeño');
+  const [entregaMontoBase, setEntregaMontoBase] = useState('3500');
+  const [comercioNombre, setComercioNombre] = useState('Burger House');
+  const [comercioHorario, setComercioHorario] = useState('20:00 a 00:00');
+  const [comercioMonto, setComercioMonto] = useState('15000');
   const [isShaking, setIsShaking] = useState(false);
   const [phoneTheme, setPhoneTheme] = useState('dark');
   const [phoneNotification, setPhoneNotification] = useState<any>(null);
@@ -257,6 +268,7 @@ export default function App() {
   const [regSurname, setRegSurname] = useState('');
   const [regVehicle, setRegVehicle] = useState<'bicicleta' | 'moto' | 'auto'>('moto');
   const [regPatent, setRegPatent] = useState('');
+  const [regPhone, setRegPhone] = useState('11223344');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [gpsProgress, setGpsProgress] = useState(0);
@@ -1092,7 +1104,7 @@ CREATE TABLE \`turnos\` (
 
       {/* --- STANDALONE EXCLUSIVE VIEWPORT ROUTING --- */}
       {activePortalView === 'dashboard' && <MainDashboard />}
-      {activePortalView === 'comercios' && (
+      {activePortalView === 'comercio' && (
         <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full relative z-10 space-y-6 text-left">
           <ArgentinaMap 
             gpsSimulating={gpsSimulating}
@@ -1295,6 +1307,7 @@ CREATE TABLE \`turnos\` (
               triggerNotification={triggerNotification}
               weatherCondition={weatherCondition}
               multiplier={multiplier}
+              role="comercio"
             />
           </div>
         </div>
@@ -1434,6 +1447,18 @@ CREATE TABLE \`turnos\` (
                     <span>${Math.round(Number(entregaMontoBase) * multiplier * 0.2).toLocaleString()}</span>
                   </div>
                 </div>
+
+                <AIChatAssistant 
+                  turnos={turnos}
+                  setTurnos={setTurnos}
+                  entregas={entregas}
+                  setEntregas={setEntregas}
+                  logEvent={logEvent}
+                  triggerNotification={triggerNotification}
+                  weatherCondition={weatherCondition}
+                  multiplier={multiplier}
+                  role="emprendedor"
+                />
 
                 <button
                   onClick={() => {
@@ -1595,12 +1620,126 @@ CREATE TABLE \`turnos\` (
               triggerNotification={triggerNotification}
               weatherCondition={weatherCondition}
               multiplier={multiplier}
+              role="emprendedor"
             />
           </div>
         </div>
       )}
 
+      {activePortalView === 'repartidor' && (
+        <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto w-full relative z-10 space-y-6 text-left">
+          <ArgentinaMap 
+            gpsSimulating={gpsSimulating}
+            gpsProgress={gpsProgress}
+            userCoords={gpsCoords}
+            markers={mapMarkers}
+          />
+          <div className="bg-gradient-to-r from-[#141B25] to-[#1A2534] rounded-2xl p-6 border border-cyan-500/20 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <Bike className="w-5 h-5 text-cyan-400" />
+                <h2 className="text-lg font-bold text-white tracking-tight uppercase">Portal de Repartidor Independiente</h2>
+              </div>
+              <p className="text-xs text-gray-400">Acepta turnos o encomiendas y gestiona tu balance financiero de inmediato (Split 80/20).</p>
+            </div>
+            <div className="flex gap-2.5 font-mono text-xs">
+              <div className="bg-black/30 border border-gray-800 rounded-xl px-4 py-2 text-center">
+                <span className="text-[10px] text-gray-500 block uppercase">Repartidor</span>
+                <span className="text-white font-bold">Carlos Gómez</span>
+              </div>
+              <div className="bg-[#101918] border border-cyan-500/20 rounded-xl px-4 py-2 text-center text-cyan-400">
+                <span className="text-[10px] text-gray-500 block uppercase">Billetera Activa (80%)</span>
+                <span className="font-bold flex items-center justify-center gap-1">
+                  <Wallet className="w-3.5 h-3.5" />
+                  {walletSaldo.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* JOBS LIST - Acceptance form */}
+            <div className="lg:col-span-5 flex flex-col gap-5">
+              <div className="bg-[#111720]/80 border border-gray-800 p-5 rounded-2xl space-y-4">
+                <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
+                  <Calendar className="w-4 h-4 text-cyan-400" />
+                  Turnos / Bloques (Comercios)
+                </h3>
+                <div className="space-y-3">
+                  {turnos.filter(t => t.estado === 'disponible').length === 0 ? (
+                    <p className="text-gray-500 text-xs italic">No hay bloques fijos B2B disponibles por ahora.</p>
+                  ) : (
+                    turnos.filter(t => t.estado === 'disponible').map(t => (
+                      <div key={t.id} className="bg-black/30 p-3 rounded-xl border border-gray-800 flex justify-between items-center gap-3">
+                        <div className="flex flex-col">
+                           <span className="text-xs font-bold text-white">{t.comercio_nombre}</span>
+                           <span className="text-[10px] text-gray-400 capitalize">{t.horario}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <span className="text-orange-400 font-bold text-xs">${t.monto_repartidor}</span>
+                           <button onClick={() => acceptShift(t.id)} className="bg-cyan-500 hover:bg-cyan-600 text-black font-bold text-[10px] px-3 py-1.5 rounded-lg active:scale-95 transition-all">
+                             ACEPTAR
+                           </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-[#111720]/80 border border-gray-800 p-5 rounded-2xl space-y-4">
+                <h3 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
+                  <Package className="w-4 h-4 text-cyan-400" />
+                  Entregas Expres (On-Demand)
+                </h3>
+                <div className="space-y-3">
+                  {entregas.filter(e => e.estado === 'buscando_repartidor').length === 0 ? (
+                    <p className="text-gray-500 text-xs italic">No hay entregas pendientes en la zona.</p>
+                  ) : (
+                    entregas.filter(e => e.estado === 'buscando_repartidor').map(e => (
+                      <div key={e.id} className="bg-black/30 p-3 rounded-xl border border-gray-800 flex justify-between items-center gap-3">
+                        <div className="flex flex-col">
+                           <span className="text-xs font-bold text-white max-w-[120px] truncate">{e.direccion_destino}</span>
+                           <span className="text-[10px] text-gray-400 capitalize">{e.tamano}</span>
+                        </div>
+                        <div className="flex items-center gap-3">
+                           <span className="text-orange-400 font-bold text-xs">${e.monto_repartidor}</span>
+                           <button onClick={() => acceptDelivery(e.id)} className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg active:scale-95 transition-all">
+                             ACEPTAR
+                           </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ASISTENTE INTELIGENTE VOZ/TEXTO ON-DEMAND DE DELIVERYPLUS */}
+            <div className="lg:col-span-7 bg-[#121A26] border border-blue-brand/20 p-5 rounded-2xl space-y-4">
+              <h3 className="font-extrabold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2 font-display">
+                <Sparkles className="w-4 h-4 text-blue-brand animate-pulse" />
+                Asistente de Asignación de Trabajos
+              </h3>
+              <p className="text-xs text-gray-400">Recibe nuevas tareas, coordina rutas y conversa con el sistema verbalmente.</p>
+              <AIChatAssistant 
+                turnos={turnos}
+                setTurnos={setTurnos}
+                entregas={entregas}
+                setEntregas={setEntregas}
+                logEvent={logEvent}
+                triggerNotification={triggerNotification}
+                weatherCondition={weatherCondition}
+                multiplier={multiplier}
+                role="repartidor"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {activePortalView === 'admin' && (
+
         <main className="flex-1 overflow-y-auto p-4 md:p-6 max-w-7xl mx-auto w-full relative z-10 space-y-5 text-left">
           {/* Header row – Advanced National Portal */}
           <div className="bg-gradient-to-r from-[#01020d] via-[#12132C] to-[#01020d] rounded-2xl p-6 border border-purple-500/25 shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -2069,78 +2208,12 @@ CREATE TABLE \`turnos\` (
       )}
 
       {/* --- MAIN WORKSPACE MULTI-COLUMNS GRIDS --- */}
-      {(activePortalView === 'sandbox' || activePortalView === 'repartidor') && (
+      {(activePortalView === 'sandbox') && (
         <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12 p-4 gap-4 relative z-10">
 
-          {/* ================= REPARTIDOR PORTAL DESCRIPTIVE SIDEBAR ================= */}
-          {activePortalView === 'repartidor' && (
-            <section className="lg:col-span-8 flex flex-col gap-5 overflow-y-auto max-h-[calc(100vh-100px)] pr-2 text-left relative z-10 select-none">
-              <ArgentinaMap markers={mapMarkers} />
-              {/* Beautiful Flutter driver portal introduction card */}
-              <div className="bg-gradient-to-r from-[#141B25] to-[#1A2534] rounded-2xl p-6 border border-indigo-500/25 shadow-lg relative overflow-hidden">
-                <div className="absolute -top-16 -right-16 w-48 h-48 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none" />
-                <div className="flex items-center gap-2.5 mb-2">
-                  <Bike className="w-5 h-5 text-indigo-400 animate-pulse" />
-                  <h2 className="text-base font-extrabold text-white tracking-tight uppercase">App de Repartidores (Carlos Gómez) • Pruebas Multi-Sesión</h2>
-                </div>
-                <p className="text-xs text-gray-300 leading-relaxed">
-                  Esta sección simula el teléfono celular del repartidor principal, <strong>Carlos Gómez</strong>. En condiciones reales, los fleteros operan en su vehículo (moto) mediante una aplicación nativa. Aquí puedes interactuar con el teléfono para ensayar misiones.
-                </p>
-                
-                {/* Live wallet/rider status dashboard */}
-                <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-center text-xs font-mono">
-                  <div className="bg-black/40 border border-gray-800 p-3 rounded-xl flex flex-col justify-center items-center gap-0.5">
-                    <span className="text-gray-500 text-[9px] uppercase">Rider Sincronizado</span>
-                    <span className="text-white font-bold text-sm">Carlos Gómez</span>
-                  </div>
-                  <div className="bg-black/40 border border-gray-800 p-3 rounded-xl flex flex-col justify-center items-center gap-0.5">
-                    <span className="text-gray-500 text-[9px] uppercase">Billetera Express (80%)</span>
-                    <span className="text-orange-400 font-extrabold text-sm">
-                      {walletSaldo.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 0 })}
-                    </span>
-                  </div>
-                  <div className="bg-black/40 border border-gray-800 p-3 rounded-xl flex flex-col justify-center items-center gap-0.5">
-                    <span className="text-emerald-450 text-emerald-450 text-emerald-400 text-[9px] font-bold uppercase">Estado GPS</span>
-                    <span className="text-emerald-450 font-bold">En Línea</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* ASISTENTE INTELIGENTE VOZ/TEXTO ON-DEMAND DE DELIVERYPLUS */}
-              <div className="bg-[#121A26] border border-blue-brand/20 p-5 rounded-2xl space-y-4">
-                <h3 className="font-extrabold text-white text-sm uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2 font-display">
-                  <Sparkles className="w-4 h-4 text-blue-brand animate-pulse" />
-                  Asistente de Asignación de Trabajos
-                </h3>
-                <p className="text-xs text-gray-400">Recibe nuevas tareas, coordina rutas y conversa con el sistema.</p>
-                <AIChatAssistant 
-                  turnos={turnos}
-                  setTurnos={setTurnos}
-                  entregas={entregas}
-                  setEntregas={setEntregas}
-                  logEvent={logEvent}
-                  triggerNotification={triggerNotification}
-                  weatherCondition={weatherCondition}
-                  multiplier={multiplier}
-                  role="repartidor"
-                />
-                <h3 className="font-bold text-white text-xs uppercase tracking-wider flex items-center gap-1.5 border-b border-gray-800 pb-2">
-                  <Sliders className="w-4 h-4 text-indigo-400" />
-                  ¿Cómo probar el flujo sincronizado entre pestañas?
-                </h3>
-                <ol className="list-decimal pl-5 text-xs text-gray-400 space-y-2 leading-relaxed">
-                  <li>Abre el <a href="/?portal=comercio" target="_blank" rel="noreferrer" className="text-orange-405 text-orange-400 hover:underline font-bold inline-flex items-center gap-0.5">Portal de Comercios <ArrowUpRight className="w-3 h-3" /></a> en una pestaña y colócala al lado de ésta.</li>
-                  <li>Publica un turno furgón de 4 horas o despacha un envío. Verás cómo suena un timbre y se muestra una <strong>Alerta Push</strong> en el teléfono celular de Carlos de manera instantánea!</li>
-                  <li>En este teléfono celular, ve a la sección de <strong>"Turnos"</strong> o <strong>"Pedidos"</strong>, acepta la misión y mira las actualizaciones en la pestaña del comercio en tiempo real.</li>
-                  <li>Simula el recorrido en el mapa utilizando el botón de GPS en el teléfono para despachar el envío. El dinero se distribuirá automáticamente en el split <strong>80/20</strong>!</li>
-                </ol>
-              </div>
-            </section>
-          )}
-        
-        {/* ================= LEFT COLUMN: IA & SIMULATOR CONTROL CENTER (Only in Dev Console Mode) ================= */}
-        {activeWorkspaceTab === 'consola' && (
-          <section className="lg:col-span-4 flex flex-col gap-4 overflow-y-auto max-h-[calc(100vh-100px)] pr-1">
+          {/* ================= LEFT COLUMN: IA & SIMULATOR CONTROL CENTER (Only in Dev Console Mode) ================= */}
+          {activeWorkspaceTab === 'consola' && (
+            <section className="lg:col-span-4 flex flex-col gap-4 overflow-y-auto max-h-[calc(100vh-100px)] pr-1">
             
             {/* AI Weather widget & control center */}
             <div className="bg-[#151D25] rounded-2xl p-5 border border-gray-800 shadow-md">
