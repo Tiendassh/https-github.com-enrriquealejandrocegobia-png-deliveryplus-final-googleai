@@ -17,29 +17,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 
-interface Turno {
-  id: number;
-  comercio_nombre: string;
-  direccion: string;
-  fecha: string;
-  horario: string;
-  monto_total: number;
-  monto_repartidor: number;
-  monto_plataforma: number;
-  estado: 'disponible' | 'confirmado' | 'en_progreso' | 'completado';
-}
-
-interface EntregaUnica {
-  id: number;
-  emprendedor_nombre: string;
-  direccion_origen: string;
-  direccion_destino: string;
-  tamano: 'pequeño' | 'mediano' | 'grande';
-  monto_total: number;
-  monto_repartidor: number;
-  monto_plataforma: number;
-  estado: 'disponible' | 'asignado' | 'recolectado' | 'en_camino' | 'entregado';
-}
+import { Turno, EntregaUnica } from '../types';
 
 interface AIChatAssistantProps {
   turnos: Turno[];

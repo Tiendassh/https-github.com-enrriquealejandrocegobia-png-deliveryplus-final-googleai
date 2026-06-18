@@ -24,7 +24,7 @@ const createCustomIcon = (iconEle: React.ReactElement, colorClass: string, label
   const htmlString = renderToStaticMarkup(
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', borderRadius: '999px', padding: '4px', border: '1px solid rgba(75,85,99,0.5)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}>
-        {React.cloneElement(iconEle, { className: `w-3 h-3 ${colorClass}` })}
+        {React.cloneElement(iconEle as React.ReactElement<{ className: string }>, { className: `w-3 h-3 ${colorClass}` })}
       </div>
       <span className={`text-[11px] font-medium leading-none ${colorClass}`} style={{ textShadow: '0px 1px 3px rgba(0,0,0,0.9)' }}>
         {label}

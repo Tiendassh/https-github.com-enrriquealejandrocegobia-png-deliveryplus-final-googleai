@@ -59,69 +59,7 @@ import { ArgentinaMap } from './components/ArgentinaMap';
 import { AIChatAssistant } from './components/AIChatAssistant';
 import { AdminChartsCard, MPWalletCard, IARecommendsCard } from './components/AdminComponents';
 
-// --- Types ---
-interface Usuario {
-  id: number;
-  email: string;
-  telefono: string;
-  rol: string;
-  activo: boolean;
-}
-
-interface Repartidor {
-  id: number;
-  nombre: string;
-  apellido: string;
-  tipo_vehiculo: 'bicicleta' | 'moto' | 'auto';
-  patente: string;
-  disponible: boolean;
-  verificado: boolean;
-  calificacion: number;
-  total_entregas: number;
-  entregas_a_tiempo: number;
-}
-
-interface Turno {
-  id: number;
-  comercio_nombre: string;
-  direccion: string;
-  fecha: string;
-  horario: string;
-  monto_total: number;
-  monto_repartidor: number;
-  monto_plataforma: number;
-  estado: 'disponible' | 'confirmado' | 'en_progreso' | 'completado';
-}
-
-interface EntregaUnica {
-  id: number;
-  emprendedor_nombre: string;
-  direccion_origen: string;
-  direccion_destino: string;
-  tamano: 'pequeño' | 'mediano' | 'grande';
-  monto_total: number;
-  monto_repartidor: number;
-  monto_plataforma: number;
-  estado: 'disponible' | 'asignado' | 'recolectado' | 'en_camino' | 'entregado';
-}
-
-interface Transaccion {
-  id: number;
-  tipo: 'ingreso_turno' | 'ingreso_entrega' | 'comision_plataforma' | 'retiro' | 'deposito';
-  monto: number;
-  saldo_anterior: number;
-  saldo_posterior: number;
-  referencia: string;
-  fecha: string;
-}
-
-interface Mensaje {
-  id: number;
-  sender: 'repartidor' | 'emprendedor';
-  tipo: 'texto' | 'audio';
-  contenido: string;
-  audio_segundos?: number;
-}
+import { Usuario, Repartidor, Turno, EntregaUnica, Transaccion, Mensaje } from './types';
 
 // Helper to retrieve initial states from sync storage
 const getInitialSyncState = () => {
@@ -255,7 +193,7 @@ export default function App() {
   const [emprendedorNombre, setEmprendedorNombre] = useState('Pastas de la Nona');
   const [entregaOrigen, setEntregaOrigen] = useState('Av. Corrientes 1000');
   const [entregaDestino, setEntregaDestino] = useState('Av. Corrientes 2000');
-  const [entregaTamano, setEntregaTamano] = useState('pequeño');
+  const [entregaTamano, setEntregaTamano] = useState<'pequeño' | 'mediano' | 'grande'>('pequeño');
   const [entregaMontoBase, setEntregaMontoBase] = useState('3500');
   const [comercioNombre, setComercioNombre] = useState('Burger House');
   const [comercioHorario, setComercioHorario] = useState('20:00 a 00:00');
