@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
 import { MainDashboard } from './components/MainDashboard';
 import {
   Bike,
@@ -204,7 +204,7 @@ const playBeepChime = (type: 'success' | 'warning' | 'info') => {
 const initialSyncState = getInitialSyncState();
 
 export default function App() {
-  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
   // Core state
@@ -284,11 +284,24 @@ export default function App() {
 
   // Load initial portal view from URL query param (e.g. ?portal=repartidor)
   useEffect(() => {
+    // Auth Listener
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
     const params = new URLSearchParams(window.location.search);
     const portal = params.get('portal');
     if (portal && ['sandbox', 'comercio', 'emprendedor', 'repartidor', 'admin'].includes(portal)) {
       setActivePortalView(portal as any);
     }
+    
+    return () => subscription.unsubscribe();
   }, []);
 
   // Native Sensors Update Loop (GPS and Gyroscope)

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import * as sdk from 'microsoft-cognitiveservices-speech-sdk';
 import { 
   Sparkles, 
   Send, 
@@ -157,8 +158,69 @@ export const AIChatAssistant: React.FC<AIChatAssistantProps> = ({
 
     if (!cleanText) return;
 
-    logEvent(`Iniciando síntesis nativa (Fallback): "${cleanText.substring(0, 45)}..."`, 'info');
-    fallbackToWebSpeech(cleanText);
+    logEvent(`Iniciando síntesis de voz: "${cleanText.substring(0, 45)}..."`, 'info');
+    
+    const azureKey = import.meta.env.VITE_AZURE_SPEECH_KEY;
+    const azureRegion = import.meta.env.VITE_AZURE_SPEECH_REGION;
+
+    if (azureKey && azureRegion) {
+      speakWithAzure(cleanText, azureKey, azureRegion);
+    } else {
+      fallbackToWebSpeech(cleanText);
+    }
+  };
+
+  const speakWithAzure = (text: string, key: string, region: string) => {
+    try {
+      setIsFetchingVoice(true);
+      const speechConfig = sdk.SpeechConfig.fromSubscription(key, region);
+      
+      // Select appropriate voice based on selected options in the future, for now default to a nice Spanish voice
+      speechConfig.speechSynthesisVoiceName = "es-AR-TomasNeural"; 
+      
+      const audioConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
+      
+      let synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
+      
+      synthesizer.speakTextAsync(
+        text,
+        (result) => {
+          if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+            setIsFetchingVoice(false);
+            setIsPlayingVoice(true);
+            logEvent(`Azure Speech TTS sintetizado con éxito.`, 'success');
+          } else {
+            console.error("Speech synthesis canceled, " + result.errorDetails + "\nDid you set the speech resource key and region values?");
+            setIsFetchingVoice(false);
+            fallbackToWebSpeech(text);
+          }
+          synthesizer.close();
+          synthesizer = null as any;
+        },
+        (error) => {
+          console.error(error);
+          setIsFetchingVoice(false);
+          fallbackToWebSpeech(text);
+          synthesizer.close();
+          synthesizer = null as any;
+        }
+      );
+      
+      // Auto-turn off playing state (hacky timer, usually use events on Audio Context, but SDK handles output)
+      // Since SDK plays it directly, we'll just guess duration or let it be.
+      // Better way is to use synthesizeToAudioStream if we want full HTMLAudio control, but auto-speaker is easier.
+      // Let's at least clear the fetching state.
+      // Also we need to clear isPlayingVoice when done playback. 
+      // Instead of manual AudioConfig, let's just let SDK play and rely on events. Unfortunately SDK doesn't easily emit "PlaybackCompleted".
+      // We will estimate duration 1s per 15 chars ~ Roughly
+      const durationMs = (text.length / 15) * 1000;
+      setTimeout(() => setIsPlayingVoice(false), durationMs);
+
+    } catch (e) {
+      console.error("Error setting up Azure TTS", e);
+      setIsFetchingVoice(false);
+      fallbackToWebSpeech(text);
+    }
   };
 
   // Resilient fallback speech engine using built-in high tracking TTS
@@ -565,14 +627,14 @@ He procesado la solicitud e ingresé la encomienda exprés de inmediato:
       </div>
 
 
-      {/* DIAGNÓSTICO DE ERROR DE PERMISOS ELEVENLABS */}
+      {/* DIAGNÓSTICO DE ERROR DE AZURE SPEECH */}
       {apiError && (
         <div className="bg-[#1A0B0D] border-b border-red-950/40 p-4 z-10 flex gap-3 items-start text-xs select-none">
           <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1 space-y-1.5 min-w-0 text-left">
             <div className="flex justify-between items-center">
               <span className="font-extrabold text-[8.5px] text-red-400 tracking-widest font-mono flex items-center gap-1 uppercase">
-                ⚠️ DIAGNÓSTICO: ElevenLabs Límite / Permiso Faltante
+                ⚠️ DIAGNÓSTICO: Error de Azure Speech
               </span>
               <button 
                 onClick={() => setApiError(null)}
@@ -583,41 +645,6 @@ He procesado la solicitud e ingresé la encomienda exprés de inmediato:
             </div>
             
             <p className="text-gray-300 font-mono text-[10.5px] leading-relaxed break-words">{apiError}</p>
-            
-            <div className="pt-1.5 flex flex-wrap gap-2.5">
-              {(apiError.toLowerCase().includes("plan") || apiError.toLowerCase().includes("gratuita") || apiError.toLowerCase().includes("library") || apiError.toLowerCase().includes("payment")) && (
-                <>
-                  <button
-                    onClick={() => {
-                      setCustomVoiceId('ByVRQtaK1WDOvTmP1PKO'); // Voz 1
-                      setApiError(null);
-                      logEvent("Cambio de voz instantáneo: se activó Voz 1", "info");
-                    }}
-                    className="text-[8.5px] bg-green-950/80 hover:bg-green-900 text-green-200 border border-green-800/60 font-bold font-mono uppercase tracking-widest px-2.5 py-1 rounded transition-all cursor-pointer animate-pulse"
-                  >
-                    👨‍💼 Cambiar a Voz 1 (Masculino)
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCustomVoiceId('4wDRKlxcHNOFO5kBvE81'); // Voz 3
-                      setApiError(null);
-                      logEvent("Cambio de voz instantáneo: se activó Voz 3", "info");
-                    }}
-                    className="text-[8.5px] bg-green-950/80 hover:bg-green-900 text-green-200 border border-green-800/60 font-bold font-mono uppercase tracking-widest px-2.5 py-1 rounded transition-all cursor-pointer animate-pulse"
-                  >
-                    👩‍💼 Cambiar a Voz 3 (Femenina)
-                  </button>
-                </>
-              )}
-              <a 
-                href="https://elevenlabs.io/app/settings/api-keys"
-                target="_blank"
-                rel="noreferrer"
-                className="text-[8.5px] hover:text-white text-red-400 font-mono uppercase tracking-widest underline py-1 flex items-center gap-0.5 font-bold"
-              >
-                Configurar permisos API Key en ElevenLabs ➔
-              </a>
-            </div>
           </div>
         </div>
       )}
@@ -627,7 +654,7 @@ He procesado la solicitud e ingresé la encomienda exprés de inmediato:
         <div className="bg-[#0D0D0D] border-b border-blue-brand/20 px-5 py-2.5 z-10 flex items-center justify-between gap-3 text-[10px] text-blue-brand select-none animate-pulse">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-blue-brand animate-spin" />
-            <span className="font-bold font-mono uppercase tracking-widest text-[9px]">ElevenLabs B2B: Clonando voz y sintetizando audio (#p7Aw)...</span>
+            <span className="font-bold font-mono uppercase tracking-widest text-[9px]">Azure TTS: Clonando voz y sintetizando audio...</span>
           </div>
           <span className="text-[8px] font-mono bg-blue-brand/10 border border-blue-brand/20 px-2 py-0.5 rounded text-blue-brand">STREAMING BUFFER</span>
         </div>
@@ -761,7 +788,7 @@ He procesado la solicitud e ingresé la encomienda exprés de inmediato:
                 className="mt-1 text-[8px] font-mono text-gray-500 hover:text-white uppercase tracking-wider flex items-center gap-1 transition-colors pl-2 self-start"
                 title="Sintetizar respuesta con voz clonada configurada"
               >
-                <Volume2 className="w-2.5 h-2.5 text-blue-brand" /> Escuchar con Voz Clonada (ElevenLabs)
+                <Volume2 className="w-2.5 h-2.5 text-blue-brand" /> Escuchar con Voz Clonada (Azure Speech)
               </button>
             )}
 

@@ -1,13 +1,21 @@
 import React from 'react';
-import { signInWithPopup } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { BrandLogo } from './BrandLogo';
 
 export const LoginDashboard: React.FC = () => {
 
   const signInWithGoogle = async () => {
     try {
-      await signInWithPopup(auth, googleProvider);
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: window.location.origin,
+        }
+      });
+      if (error) {
+        console.error(error);
+        alert('Error signing in with Google');
+      }
     } catch (error) {
       console.error(error);
       alert('Error signing in with Google');
